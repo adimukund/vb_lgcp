@@ -7,6 +7,9 @@ library(tidyverse)
 library(ggExtra)
 library(scales)
 library(gtable)
+library(lognorm)
+library(gamlss.dist)
+library(gamlss)
 
 # read in data
 setwd(dirname(rstudioapi::getSourceEditorContext()$path))
@@ -214,3 +217,83 @@ ggsave(
     width = 8,
     height = 4
 )
+
+
+# The repeat grf stats ----------------------------------------------------
+cbPalette <- c("#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7", "#999999") 
+
+df = read_csv('../data/repeat_test_lgrf_mean.csv')
+df$Source = factor(df$Source, levels = c("Real", "Computed"))
+
+p = ggplot()
+p = p + geom_freqpoly(
+    data = df,
+    aes(
+        x = Rate,
+        color = Source,
+        fill = Source,
+    ),
+    size = 1
+)
+p = p + ylab("Num. Cells")
+p = p + scale_color_manual(values=cbPalette) + scale_fill_manual(values=cbPalette)
+p = p + theme_cowplot()
+p
+
+ggsave(
+    "../figs/repeat_vb_lgrf_histogram.pdf",
+    p,
+    device = "pdf",
+    width = 7,
+    height = 4
+)
+
+
+df %>%
+    dplyr::group_by(Source) %>%
+    dplyr::do(
+        setNames(data.frame(t(estimateParmsLognormFromSample(.$Rate))),
+                 c("mu", "sigma"))) -> dfz
+
+logNormDist = function(x, mu, sigma) {
+    return(dLOGNO(x, mu, sigma))
+}
+
+p = ggplot()
+p = p + geom_line(
+    aes(
+        x = seq(0, 400, by=0.1),
+        y = logNormDist(seq(0, 400, by=0.1), 3.97, 0.990),
+        color = "Real",
+    ),
+    size = 1,
+)
+p = p + geom_line(
+    aes(
+        x = seq(0, 400, by=0.1),
+        y = logNormDist(seq(0, 400, by=0.1), 3.99, 0.943),
+        color = "Computed",
+    ),
+    size = 1,
+)
+p = p + scale_color_manual(
+    name = "Source",
+    breaks = c("Real", "Computed"),
+    values = c(cbPalette[1], cbPalette[2]),
+#     values = c(Real=cbPalette[1], Computed=cbPalette[2])
+)
+p = p + coord_cartesian(
+    xlim=c(0, 350)
+)
+p = p + xlab("Rate") + ylab("Density of Log-Normal PDF")
+p = p + theme_cowplot()
+p
+
+ggsave(
+    "../figs/density_fit_lgrf.pdf",
+    p,
+    device = "pdf",
+    width = 8,
+    height = 4
+)
+
